@@ -1,0 +1,3 @@
+The HKDC1 gene has been shown to influence immune cell function by modulating energy production, which is critical during immune activation and inflammation. Research suggests that HKDC1 may help regulate immune responses by balancing metabolic needs, thereby supporting the activation and function of immune cells under stress conditions.
+
+In this project, differential gene expression is performed in R using DESeq2 package to find genes that are upregulated and downregulated when HKDC1 gene is knocked out. Then gene set enrichment analysis using fgsea package to identify gene sets or pathways impacted by HKDC1 knockout. Six immmune response pathways are identified to be differentially expressed.  
