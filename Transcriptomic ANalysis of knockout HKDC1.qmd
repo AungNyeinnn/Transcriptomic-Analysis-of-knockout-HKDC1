@@ -1,0 +1,127 @@
+---
+title: "Transcriptomic analysis of knockout HKDC1"
+author: "Aung Nyein"
+format: docx
+editor: visual
+echo: false
+---
+
+To explore how the absence of HKDC1 affects global gene expression, I utilized high-throughput RNA sequencing data from HKDC1 knockout(sgHKDC1-1) and control cell lines, from an original study conducted by Liu et al, 2024. The dataset used in this study is publicly available under the accession number **GSE216107**, which includes comprehensive transcriptomic information from these cell lines, providing valuable insights into the impact of HKDC1 depletion on gene expression. Differential gene expression analysis is performed in this study to see how many genes are upregulated and how many are downregulated, followed by gene set enrichment analysis to identify pathways or gene sets associated with HKDC1.
+
+### Importing Libraries
+
+```{r, echo = TRUE, message = FALSE, warning = FALSE, error = FALSE}
+library(dplyr)
+library(tidyverse)
+library(GEOquery)
+library(DESeq2)
+```
+
+### Importing Data
+
+```{r, echo = TRUE, message = FALSE, warning = FALSE, error = FALSE}
+#Load RNA sequencing data
+RNA_seq   <- read.delim("C:/Users/Duche/Downloads/GSE216107_gene_count.txt.gz", header=TRUE)
+
+# get metadata
+gse<- getGEO(GEO='GSE216107', GSEMatrix= TRUE)
+metadata <- pData(phenoData(gse[[1]]))
+
+```
+
+### Pre-processing data
+
+```{r, echo = TRUE, message = FALSE, warning = FALSE, error = FALSE}
+#Pre-processing data
+metadata_modified<- metadata%>%
+  select(1,19)%>%
+  mutate(title = sub(" .*", "", title))%>%
+  arrange(title)
+
+RNA_seq_modified<-RNA_seq %>%
+  select(1:7)
+```
+
+### Differential Gene Expression using DESeq2 package
+
+```{r, echo = TRUE, message = FALSE, warning = FALSE, error = FALSE}
+#Preparing data for Differential Gene Expression
+count_data <- RNA_seq_modified[, -1]  # Remove the gene column
+rownames(count_data) <- RNA_seq_modified$gene_id
+
+rownames(metadata_modified) <- metadata_modified$description
+
+```
+
+```{r, echo = TRUE, message = FALSE, warning = FALSE, error = FALSE}
+#Performing DIfferential Gene Expression
+dds <- DESeqDataSetFromMatrix(countData = count_data, colData = metadata_modified, design = ~ title)
+dds <- dds[rowSums(counts(dds)) > 10, ]
+dds <- DESeq(dds)
+
+# Get the results of the differential expression analysis
+res <- results(dds)
+```
+
+### Analyzing the results
+
+```{r, echo = TRUE, message = FALSE, warning = FALSE, error = FALSE}
+#To view only genes with adjusted p-value of 0.05
+res_significant <- results(dds, alpha=0.05)
+summary(res_significant)
+```
+
+Out of 20,967 genes tested for differential gene expression, 893 genes are upregulated and 652 genes are downregulated in HKDC1 knockout celll lines at adjusted p-value threshold of 0.05.
+
+### Visualizing data
+
+```{r, echo = TRUE, message = FALSE, warning = FALSE, error = FALSE}
+# Volcano plot
+library(ggplot2)
+ggplot(res, aes(x=log2FoldChange, y=-log10(padj))) +
+  geom_point(aes(color = padj < 0.05 & abs(log2FoldChange) > 1)) +
+  theme_minimal() +
+  labs(title = "Volcano Plot", x = "Log2 Fold Change", y = "-log10 Adjusted p-value")
+```
+
+In this volcano plot, genes with positive Log2 Fold Change are upregulated and those with negative values are downregulated. On the y-axis, genes with higher values are significantly different in their expression.
+
+```{r, echo = TRUE, message = FALSE, warning = FALSE, error = FALSE}
+#MA plot
+plotMA(res)
+
+```
+
+The MA plot is another way of visualizing differential gene expression data. Genes that are significantly different in their expression between normal samples and HKDC1 knockout samples are colored in blue. Genes with positive log fold change are upregulated and those with negative values are downregulated in HKDC1 knockout cell lines.
+
+### Gene Set Enrichment Analysis
+
+```{r, echo = TRUE, message = FALSE, warning = FALSE, error = FALSE}
+library(fgsea)
+library(msigdbr)
+
+gene_list <- res$log2FoldChange
+names(gene_list) <- rownames(res)
+gene_list <- sort(gene_list, decreasing = TRUE)  # Sort in decreasing order
+
+# Load the gene sets 
+gene_sets <- msigdbr(species = "Homo sapiens", category = "C7")  # C7 = Immunological signatures
+
+# Convert the gene sets to a list format
+gene_sets_list <- split(gene_sets$gene_symbol, gene_sets$gs_name)
+
+# Run GSEA
+fgsea_result <- fgsea(pathways = gene_sets_list, stats = gene_list, nperm = 1000)
+```
+
+```{r, echo = TRUE, message = FALSE, warning = FALSE, error = FALSE}
+#Filtering only gene sets with adjusted p-value of less than 0.1 
+sig_fgsea_result <- fgsea_result[fgsea_result$padj < 0.1, ]
+sig_fgsea_result[, c("pathway", "padj")]
+```
+
+Using gene set enrichment analysis with gene sets related to immune response pathways from MSigDB, 6 gene sets are identified to be significantly associated with HKDC1 knockouts. This implies the role of HKDC1 in immune response pathways.
+
+### References:
+
+-   Liu P, Luo Y, Wu H, Han Y et al. HKDC1 functions as a glucose sensor and promotes metabolic adaptation and cancer growth via interaction with PHB2. Cell Death Differ 2024 Dec;31(12):1595-1610. PMID: [39375512](https://www.ncbi.nlm.nih.gov/pubmed/39375512 "Link to PubMed record")
